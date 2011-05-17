@@ -9,21 +9,30 @@
  *\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\/\\/\\\\\\/\/\/\\\\/\/\/\\\/\\\\\\\/\/\/\\\\\/\\\/\\\\\\\\\\\
  *\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
  *
- * dragscroll.js
+ * jquery.dragscroll.js
  * a scrolling plugin for the jQuery JavaScript Library
  *
  * Copyright 2011, Thomas Appel, http://thomas-appel.com, mail(at)thomas-appel.com
- * licensed under MIT license (See LICENSE.txt)
+ * dual licensed under MIT and GPL license
+ * http://dev.thomas-appel.com/licenses/mit.txt
+ * http://dev.thomas-appel.com/licenses/gpl.txt
  *
  * 
  *
  * changelog:
  * --------------------------------------------------------------------------------------------
+ * - 0.2.b2pre:
+ * --------------------------------------------------------------------------------------------
+ *		- removed some options: onScrollInit, workOnChildElement, onScrollDirChange
+ *		- fixed some problemes
+ *		- changed some internal functions
+ * -------------------------------------------------------------------------------------------- 
  * - 0.2.b1pre:
+ * --------------------------------------------------------------------------------------------
  *		- completely rewrote this plugin
  *		- added scrollbars
  *		- added mousewheel support
- *			
+ * --------------------------------------------------------------------------------------------
  * - 0.1.b5b	fixed classname removal on plugin destruction
  * - 0.1.b5a	rewrote almost the whole scrolling mechanism
  * - 0.1.b4:	rewrote event unbinding (teardown,destroy), plugin is now self destroyable
@@ -82,10 +91,11 @@
 			M_MOVE : DragScroll.prototype.isTouchDevice ?  'touchmove.' + DragScroll.prototype.name : 'mousemove.' + DragScroll.prototype.name,
 			M_ENTER : 'mouseenter.' + DragScroll.prototype.name,
 			M_LEAVE : 'mouseleave.' + DragScroll.prototype.name,
-			//M_WHEEL : $.fn.mwheelintent ? 'mwheelintent.' + DragScroll.prototype.name : 'mousewheel.' + DragScroll.prototype.name,
 			M_WHEEL : 'mousewheel.' + DragScroll.prototype.name,
 			S_STOP : 'scrollstop.' + DragScroll.prototype.name,
-			S_START : 'scrollstart.' + DragScroll.prototype.name
+			S_START : 'scrollstart.' + DragScroll.prototype.name,
+			SCROLL : 'scroll.' + DragScroll.prototype.name,
+			RESIZE : DragScroll.prototype.isTouchDevice ?  'orientationchange.' + DragScroll.prototype.name : 'resize.' + DragScroll.prototype.name
 			
 		},
 		init : function (elem, options) {
@@ -98,51 +108,92 @@
 			this.innerElem.addClass(this.name+'-inner');
 			this.scrollElem.addClass(this.name+'-scroller');
 			var $div = $( div );
-			if (this.options.scrollBars) {
-				this.scrollBarContainer = $( [$div, $div.clone()] );
-				this.scrollBar = $( [$div.clone(), $div.clone()] );
-				this.scrollBarContainer.each(function( i ) {
-					var o = i === 0 ? 'h' : 'v';
-					that.scrollBarContainer[i]
-						.addClass(that.name + '-scrollbar-container ' + o)
-						.append(that.scrollBar[i].addClass(that.name + '-scrollbar ' + o) )						
-						.appendTo(that.elem);
-				});
+			
+			this.scrollBarContainer = $( [$div, $div.clone()] );
+			this.scrollBar = $( [$div.clone(), $div.clone()] );
+			this.scrollBarContainer.each(function( i ) {
+				var o = i === 0 ? 'h' : 'v',
+				ah = that.options.autoFadeBars ? ' autohide' : '';
+				that.scrollBarContainer[i]
+					.addClass(that.name + '-scrollbar-container ' + o + ah)
+					.append(that.scrollBar[i].addClass(that.name + '-scrollbar ' + o) );
+				if (that.options.scrollBars) {						
+					that.scrollBarContainer[i].appendTo(that.elem);	
+				}			
+			});
 
-				this.elem.css('overflow','visible');
-				this.barIndex = {
-					X : scrollbarDimension(this.scrollElem, this.scrollElem, 'Width'),
-					Y : scrollbarDimension(this.scrollElem, this.scrollElem, 'Height')
-				};
-				this.scrollBar[0].css({width:this.barIndex.X[1]});
-				this.scrollBar[1].css({height:this.barIndex.Y[1]});				
-			} 
+			this.elem.css('overflow','visible');
+			
 			this.mx = 0;
 			this.my = 0;						
 			this.__tmp__ = {_diff_x : 0,_diff_y : 0,_temp_x : 0,_temp_y : 0,_x : 0,_y : 0,_mx : 0,_my : 0,_deltaX : 0,_deltaY : 0,_start : {x:0,y:0}};
 			this.__tmp__._scrolls = false;
-			this.timer = void 0;
-			this._getContainerOffset();
+			this._buildIndex();
+			this.timer = void 0;			
 			this._bind();
+			this.elem.trigger(this.name + 'ready');			
+		},
+		/**
+		 *  call this on changes of the scrollcontainer, e.g updated content, size changes, etc.
+		 */
+		reInit : function () {
+			return this._buildIndex();
+		},
+		_buildIndex : function () {
+			this.barIndex = {
+				X : scrollbarDimension(this.scrollElem, this.scrollElem, 'Width'),
+				Y : scrollbarDimension(this.scrollElem, this.scrollElem, 'Height')
+			};
+			this._getContainerOffset();
+			this.scrollBar[0].css({width:this.barIndex.X[1]});
+			this.scrollBar[1].css({height:this.barIndex.Y[1]});		
+			
+			this.__tmp__._cdd = {
+				x : this.options.scrollBars ? this.scrollBarContainer[0].innerWidth() : this.scrollElem.innerWidth(),
+				y : this.options.scrollBars ? this.scrollBarContainer[1].innerHeight() : this.scrollElem.innerHeight()
+			}
 			
 		},
 		_bind : function(){
-
+			var that = this;
+			$global.bind(this.events.RESIZE, $.proxy(this._buildIndex, this));
+			this.elem.bind('destroyed',$.proxy(this.teardown,this));
+			this.elem.bind(this.name + 'ready', $.proxy(this.onInitReady,this));
 			//this.scrollBarContainer.bind(this.events.M_DOWN,$.proxy(this.scrollStart,this));			
-			this.elem.delegate('.'+this.name+'-scrollbar-container', this.events.M_DOWN,$.proxy(this.scrollStart,this));			
-			
+			this.elem.delegate('.'+this.name+'-scrollbar-container', this.events.M_DOWN,$.proxy(this.scrollStart,this));						
 			this.elem.bind( this.events.M_WHEEL, $.proxy(this.scrollStart,this));			
 			
 			this.scrollElem.bind( this.events.M_DOWN, $.proxy(this.dragScrollStart,this));	
 												
 			if ( this.options.autoFadeBars ) {
-				this.scrollBarContainer.bind('mouseenter', $.proxy(this.showBars, this) );
-				this.scrollBarContainer.bind('mouseleave', $.proxy(this.hideBars, this) );
-				this.elem.bind('scrollstart', $.proxy(this.showBars, this) );
-				this.elem.bind('scrollstop', $.proxy(this.hideBars, this) );
+				this.elem.delegate('.'+this.name+'-scrollbar-container', 'mouseenter',$.proxy(this.showBars,this))			
+					.delegate('.'+this.name+'-scrollbar-container', 'mouseleave',$.proxy(this.hideBars,this))							
+					.bind( this.events.S_START, function() {
+						that.options.onScrollStart.call(that.elem.addClass('scrolls'));
+						that.showBars();
+					})
+					.bind( this.events.S_STOP, function(){
+						that.options.onScrollEnd.call(that.elem.removeClass('scrolls'));
+						that.hideBars();
+					});
 			}
 		},
-		
+		_unbind : function(){
+			this.elem.unbind(this.name + 'ready')
+				.undelegate('.'+this.name+'-scrollbar-container', this.events.M_DOWN )
+				.undelegate('.'+this.name+'-scrollbar-container', 'mouseenter' )
+				.undelegate('.'+this.name+'-scrollbar-container', 'mouseleave' )
+				.unbind( this.events.M_WHEEL )						
+				.unbind( this.events.S_STOP )						
+				.unbind( this.events.S_START );							
+			this.scrollElem.unbind( this.events.M_DOWN );					
+			$global.unbind(this.events.M_MOVE).unbind(this.events.M_UP).unbind(this.events.RESIZE);	
+		},
+		onInitReady : function () {
+			if ( this.options.autoFadeBars ) {
+				this.showBars().hideBars();
+			}
+		},
 		initMouseWheel : function ( mode ) {
 			switch (mode) {
 			case 'rebind':
@@ -168,6 +219,9 @@
 				};				
 			}
 		}()),
+		_getScrollOffset : function () {
+			return {x : this.scrollElem[0].scrollLeft, y : this.scrollElem[0].scrollTop};
+		},
 		_getMousePosition : function( e, delta, deltaX, deltaY ) {
 			//console.log(e.originalEvent.wheelDeltaX, e.originalEvent.wheelDeltaY)
 			//console.log(deltaX, deltaY)
@@ -176,40 +230,49 @@
 				this.mx = this.__tmp__._scrollsX ? page.X - this.containerOffset.left : this.mx;	
 				this.my = this.__tmp__._scrollsY ? page.Y - this.containerOffset.top : this.my;										
 			} else {
-				var mH = this.scrollElem.innerHeight(),
-					mW = this.scrollElem.innerWidth()
+
 				
-				deltaX = deltaX != void 0 ? -deltaX : delta;
-				deltaY = deltaY != void 0 ? deltaY : delta;
+				//deltaX = deltaX !== void 0 ? -deltaX : delta;
+				//deltaY = deltaY !== void 0 ? deltaY : delta;
+				deltaX = deltaX !== undefined ? -deltaX : delta;
+				deltaY = deltaY !== undefined ? deltaY : delta;
 				// try to normalize delta (in case of magic mouse )
-				deltaX = Math.min(40, Math.max( deltaX , -40));
-				deltaY = Math.min(40, Math.max( deltaY , -40));
+				deltaX = Math.min(5, Math.max( deltaX , -5));
+				deltaY = Math.min(5, Math.max( deltaY , -5));
 
 				// TODO: revisit mousewheel normalisation
-				
-				this.mx -= this.mx <= mW ? deltaX * ( this.options.mouseWheelVelocity ) : 0;				
-				this.my -= this.my <= mH ? deltaY * ( this.options.mouseWheelVelocity ) : 0;				
-				this.mx = Math.min( Math.max( 0, this.mx ), mW );
-				this.my = Math.min( Math.max( 0, this.my ), mH );
-				this.__tmp__._deltaX = this.mx;
-				this.__tmp__._deltaY = this.my;
 
+				this.__tmp__._deltaX = deltaX;
+				this.__tmp__._deltaY = deltaY;
+//				this.__tmp__._deltaX = null;
+//				this.__tmp__._deltaY = null;
 				if (deltaX === 0 && deltaY === 0) {
 					this.scrollStop();
 				}
 
-				this.__tmp__._deltaX = null;
-				this.__tmp__._deltaY = null;
+
 			}
 		},
+		_getWheelDelta : function () {
+				var mH = this.scrollElem.innerHeight(),
+					mW = this.scrollElem.innerWidth();			
+				this.mx -= this.mx <= mW ? this.__tmp__._deltaX * ( this.options.mouseWheelVelocity ) : 0;				
+				this.my -= this.my <= mH ? this.__tmp__._deltaY * ( this.options.mouseWheelVelocity ) : 0;				
+				this.mx = Math.min( Math.max( 0, this.mx ), mW );
+				this.my = Math.min( Math.max( 0, this.my ), mH );			
+				this.__tmp__._deltaX = null;
+				this.__tmp__._deltaY = null;				
+		},
 		_getDragScrollPosition : function () {
-			var tempX,tempY,d=1;
-			
-			while (d--) { 
-				this.__tmp__._diff_x = this.__tmp__._diff_x > 0 ? this.__tmp__._diff_x++ - (this.__tmp__._diff_x++ / this.options.smoothness) : this.__tmp__._diff_x-- - (this.__tmp__._diff_x-- / this.options.smoothness);
-				this.__tmp__._diff_y = this.__tmp__._diff_y > 0 ? this.__tmp__._diff_y++ - (this.__tmp__._diff_y++ / this.options.smoothness) : this.__tmp__._diff_y-- - (this.__tmp__._diff_y-- / this.options.smoothness);
-			}			
-			
+			var tempX,tempY,sm = this.options.smoothness;
+			 
+			this.__tmp__._diff_x = this.__tmp__._diff_x > 0 ? 
+					this.__tmp__._diff_x++ - ( this.__tmp__._diff_x++ / sm ) : 
+					this.__tmp__._diff_x-- - ( this.__tmp__._diff_x-- / sm );
+			this.__tmp__._diff_y = this.__tmp__._diff_y > 0 ? 
+					this.__tmp__._diff_y++ - ( this.__tmp__._diff_y++ / sm ) : 
+					this.__tmp__._diff_y-- - ( this.__tmp__._diff_y-- / sm );
+									
 			tempX = Math.round(Math.max(Math.min(this.scrollElem[0].scrollLeft + this.__tmp__._diff_x, this.scrollElem[0].scrollWidth ), 0));
 			tempY = Math.round(Math.max(Math.min(this.scrollElem[0].scrollTop + this.__tmp__._diff_y, this.scrollElem[0].scrollHeight ), 0));
 
@@ -220,8 +283,7 @@
 		_hasScrolledSince : function () {
 			var sl = this.scrollElem[0].scrollLeft,
 				st = this.scrollElem[0].scrollTop;
-
-				return {varify : this.__tmp__._temp_x !== sl || this.__tmp__._temp_y !== st, scrollLeft : sl, scrollTop : st};				
+				return {verify : this.__tmp__._temp_x !== sl || this.__tmp__._temp_y !== st, scrollLeft : sl, scrollTop : st};				
 		},
 		_getScrollPosition : function(posL,posT) {
 			var tempX,tempY;
@@ -245,8 +307,8 @@
 		},				
 
 		setScrollbar : function() {						
-			this.scrollBar[0].css({left : Math.abs( Math.ceil( this.scrollElem.scrollLeft() / this.barIndex.X[0] ) )});			
-			this.scrollBar[1].css({top : Math.abs( Math.ceil( this.scrollElem.scrollTop() / this.barIndex.Y[0] ) )});			
+			this.scrollBar[0].css({left : Math.abs( Math.ceil( this.scrollElem[0].scrollLeft / this.barIndex.X[0] ) )});			
+			this.scrollBar[1].css({top : Math.abs( Math.ceil( this.scrollElem[0].scrollTop / this.barIndex.Y[0] ) )});			
 		},
 		
 		scroll:function(l,t){
@@ -266,7 +328,9 @@
 			targetCX = target === this.scrollBarContainer[0][0], targetCY = target === this.scrollBarContainer[1][0];
 			
 			e.preventDefault();
-						
+			
+			this.scrollElem.unbind( this.events.SCROLL );
+
 			this.__tmp__._scrollsX = targetX || targetCX;
 			this.__tmp__._scrollsY = targetY || targetCY;
 
@@ -285,22 +349,34 @@
 				$global.bind(this.events.M_MOVE,$.proxy(this._getMousePosition,this));	
 				$global.bind(this.events.M_UP,$.proxy(this.scrollStop,this));				
 				
-				this.__tmp__._start.x = targetX ? this.mx - this.scrollBar[0].offset().left + this.scrollBarContainer[0].offset().left : targetCX ? Math.round( this.scrollBar[0].outerWidth() / 2 ) : 0;
-				this.__tmp__._start.y = targetY ? this.my - this.scrollBar[1].offset().top + this.scrollBarContainer[1].offset().top : targetCY ? Math.round(this.scrollBar[1].outerHeight()/2) : 0;						
+				this.__tmp__._start.x = targetX ? 
+					this.mx - this.scrollBar[0].offset().left + this.scrollBarContainer[0].offset().left : 
+						targetCX ? 
+							Math.round( this.scrollBar[0].outerWidth() / 2 ) : 
+							0;
+				this.__tmp__._start.y = targetY ? 
+					this.my - this.scrollBar[1].offset().top + this.scrollBarContainer[1].offset().top : 
+						targetCY ? 
+							Math.round(this.scrollBar[1].outerHeight()/2) : 
+							0;						
 				this.__tmp__._mode = 'scrollbar';
 			}
 			
 			this.startTimer('scrollBPos');					
-			this.elem.trigger('scrollstart');		
+			this.elem.trigger( this.events.S_START );		
 		},
-		
+		_getSCBPos : function () {
+			
+		},
 		scrollBPos : function () {	
 			var t,l,pos;
 			
 			this._getDiff();
-			
-			l = Math.min(Math.max( 0, this.mx - this.__tmp__._start.x ), this.scrollBarContainer[0].innerWidth() - this.scrollBar[0].outerWidth() );
-			t = Math.min(Math.max( 0, this.my - this.__tmp__._start.y ), this.scrollBarContainer[1].innerHeight() - this.scrollBar[1].outerHeight() );
+			if (this.__tmp__._mode === 'wheel') {
+				this._getWheelDelta();
+			}
+			l = Math.min(Math.max( 0, this.mx - this.__tmp__._start.x ), this.__tmp__._cdd.x - this.barIndex.X[1] );
+			t = Math.min(Math.max( 0, this.my - this.__tmp__._start.y ), this.__tmp__._cdd.y - this.barIndex.Y[1] );
 
 			pos = this._getScrollPosition( l, t );			
 
@@ -310,7 +386,7 @@
 			this.scroll( pos[0], pos[1] );				
 			this.startTimer('scrollBPos');			
 			
-			if ( this.__tmp__._mode === 'wheel' && this.__tmp__._scrolls && !this._hasScrolledSince().varify ) {
+			if ( this.__tmp__._mode === 'wheel' && this.__tmp__._scrolls && !this._hasScrolledSince().verify ) {
 				this.scrollStop();				
 			}
 			
@@ -327,13 +403,13 @@
 			$global.unbind( this.events.M_MOVE );				
 			$global.unbind( this.events.M_UP );	
 
-			if ( hasScrolled.varify ) {	
+			if ( hasScrolled.verify ) {	
 				this.startTimer('scrollStop');			
 			} else {													
 				this.stopScroll();	
 				this.__tmp__._scrolls = false;				
 				this.initMouseWheel('rebind');				
-				this.elem.trigger('scrollstop');	
+				this.elem.trigger( this.events.S_STOP );	
 				this.__tmp__._mx = null;
 				this.__tmp__._my = null;
 				this.__tmp__._start.x = 0;				
@@ -364,60 +440,72 @@
 			$global.bind( this.events.M_MOVE, $.proxy( this._getMousePosition, this ) );				
 			$global.bind( this.events.M_UP, $.proxy( this._initDragScrollStop,this ) );	
 			
-			this.scrollElem.bind( 'scroll', $.proxy( this.setScrollbar,this ) );		
+			this.scrollElem.bind( this.events.SCROLL, $.proxy( this.setScrollbar,this ) );		
 			this.startTimer('dragScrollMove');
+			this.elem.trigger( this.events.S_START );		
 		},
-		
+		_checkDirection : function () {
+			
+		},
 		dragScrollMove : function(){					
 			
 			this.stop = false;
 			var sl = Math.min(Math.max(this.__tmp__._start.x - this.mx,0),this.scrollElem[0].scrollWidth),			 
 				st = Math.min(Math.max(this.__tmp__._start.y - this.my,0),this.scrollElem[0].scrollHeight),
-				scrolled = this._hasScrolledSince();
+				scrolled = this._getScrollOffset();
 			this._getDiff();
-			this.scroll( sl, st );								
-			
-			this.__tmp__.temp_x = scrolled.scrollLeft;
-			this.__tmp__.temp_y	= scrolled.scrollTop;		
+			this.scroll( sl, st );											
+			this.__tmp__.temp_x = scrolled.x;
+			this.__tmp__.temp_y	= scrolled.y;		
 			
 			this.startTimer('dragScrollMove');			
 		},
 		_initDragScrollStop : function (){
 			$global.unbind( this.events.M_MOVE );	
 			$global.unbind( this.events.M_UP );						
-			
+			this.elem.removeClass('scrolls');
 			this.stopScroll();
 			this.dargScrollStop();
 		},
 		dargScrollStop : function () {
-			var hasScrolled = this._hasScrolledSince(),
-				d = 1,sl, st, pos;
-	
-			pos = this._getDragScrollPosition();
-
-			this.scroll(pos[0],pos[1] );	
+			var hasScrolled = this._hasScrolledSince(),pos;
 			
-			if ( hasScrolled.varify ) {
+			if ( hasScrolled.verify ) {
+				pos = this._getDragScrollPosition();
+				this.scroll( pos[0], pos[1] );	
+				
 				this.startTimer('dargScrollStop');			
 				this.__tmp__._temp_x = hasScrolled.scrollLeft;
 				this.__tmp__._temp_y = hasScrolled.scrollTop;				
 			} else {
 				this.stopScroll();
+				this.scrollElem.unbind( this.events.SCROLL ) ;
+				this.elem.trigger( this.events.S_STOP );
 			}								
 		},
 		
-		hideBars : function(){
-			this.scrollBarContainer.fadeTo(250,0);
+		hideBars : function(){	
+			if (this.__tmp__._scrolls) {
+				return this;
+			}
+			this.scrollBarContainer.each(function(){
+				this.stop().delay(100).fadeTo(250,0);
+			});			
+			return this;
 		}, 
 		showBars : function(){
-			this.scrollBarContainer.fadeTo(250,1);
+			
+			this.scrollBarContainer.each(function(){
+				this.css({opacity:0,display:'block'});
+				this.stop().delay(100).fadeTo(250,1);
+			});
+			return this;
 		},
 		startTimer : function (fn) {
 			var that = this;			
 			this.timer = global.setTimeout(function(){
 				that[fn]();
 			},15);
-
 		},
 		stopScroll : function(){
 			global.clearTimeout( this.timer );
@@ -425,11 +513,11 @@
 		},		
 
 		teardown : function (e) {
+			this.elem.removeClass('scrolls');
 			this._unbind();
-			$.removeData(this.name);
+			this.elem.unbind('destroyed');
+			$.removeData( this.name );
 		}
-		
-		
 	});
 
 	$.fn.dragscroll = function( options ) {
@@ -437,13 +525,10 @@
 				scrollClassName : '',
 				scrollBars : true,
 				smoothness : 15,
-				mouseWheelVelocity : 1,
-				autoFadeBars : false,
-				onScrollInit : function(){},
+				mouseWheelVelocity : 2,
+				autoFadeBars : true,				
 				onScrollStart : function(){},
-				onScrollEnd : function(){},
-				workOnChildElement : false, // set this to true if the element itself is never removed from the page, e.g the element is a wrapper for ajax content
-				onScrollDirChange : function(){}
+				onScrollEnd : function(){}
 			},
 			o = $.extend({}, defaults, options),
 			elem = this;	

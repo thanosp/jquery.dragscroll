@@ -18,7 +18,9 @@
 				margin : 0 auto;				
 				overflow:hidden;
 			}
-			
+			.scrolls {
+				cursor:move;
+			}
 			.dragscroll-scroller {
 				overflow:hidden !important;
 			}
@@ -37,8 +39,15 @@
 			.dragscroll-scrollbar-container {
 				cursor : pointer;
 				position:absolute;	
+				background: rgb(220,220,220);
 				background: rgba(0,0,0,.2);
+				-webkit-border-radius : 5px;
+				-moz-border-radius : 5px;
+				border-radius : 5px;				
 			}
+			.dragscroll-scrollbar-container {
+				display:none;
+			}			
 			.dragscroll-scrollbar-container.h {
 				width : 100%; 
 				height : 4px;
@@ -62,7 +71,8 @@
 			.dragscroll-scrollbar {
 				position:absolute;
 				cursor : pointer;
-				background:#333;
+				background:rgb(160,160,160);
+				background:rgba(0,0,0,.4);
 				-webkit-border-radius : 5px;
 				-moz-border-radius : 5px;
 				border-radius : 5px;
