@@ -173,16 +173,17 @@
 												
 			if ( this.options.autoFadeBars ) {
 				this.elem.delegate('.'+this.name+'-scrollbar-container', 'mouseenter',$.proxy(this.showBars,this))			
-					.delegate('.'+this.name+'-scrollbar-container', 'mouseleave',$.proxy(this.hideBars,this))							
-					.bind( this.events.S_START, function() {
+					.delegate('.'+this.name+'-scrollbar-container', 'mouseleave',$.proxy(this.hideBars,this))
+				}							
+				this.elem.bind( this.events.S_START, function() {
 						that.options.onScrollStart.call(that.elem.addClass('scrolls'));
-						that.showBars();
+						that.options.autoFadeBars && that.showBars();
 					})
 					.bind( this.events.S_STOP, function(){
 						that.options.onScrollEnd.call(that.elem.removeClass('scrolls'));
-						that.hideBars();
+						that.options.autoFadeBars && that.hideBars();
 					});
-			}
+			
 		},
 		_unbind : function(){
 			this.elem.unbind(this.name + 'ready')
@@ -196,8 +197,11 @@
 			$global.unbind(this.events.M_MOVE).unbind(this.events.M_UP).unbind(this.events.RESIZE);	
 		},
 		onInitReady : function () {
+			
 			if ( this.options.autoFadeBars ) {
 				this.showBars().hideBars();
+			} else {
+				this.showBars();	
 			}
 		},
 		initMouseWheel : function ( mode ) {
@@ -231,12 +235,14 @@
 		_getMousePosition : function( e, delta, deltaX, deltaY ) {
 			//console.log(e.originalEvent.wheelDeltaX, e.originalEvent.wheelDeltaY)
 			//console.log(deltaX, deltaY)
-			if (!delta) {
-				var page = this._pageXY.apply( this, arguments );								
-				this.mx = this.__tmp__._scrollsX ? page.X - this.containerOffset.left : this.mx;	
-				this.my = this.__tmp__._scrollsY ? page.Y - this.containerOffset.top : this.my;										
-			} else {
+			e.preventDefault();
 
+			if (!delta) {
+				var page = this._pageXY.apply( this, arguments );					
+				this.mx = this.__tmp__._scrollsX ? Math.max(0, Math.min(this.__tmp__._cdd.x,page.X - this.containerOffset.left) ) : this.mx;	
+				this.my = this.__tmp__._scrollsY ? Math.max(0, Math.min(this.__tmp__._cdd.y,page.Y - this.containerOffset.top) ) : this.my;																	
+			} else {
+				
 				
 				//deltaX = deltaX !== void 0 ? -deltaX : delta;
 				//deltaY = deltaY !== void 0 ? deltaY : delta;
@@ -329,7 +335,7 @@
 		 * ====================================================================================
 		 */
 		scrollStart : function( e, delta ) {	
-			
+			this.stopScroll();
 			var target = e.target, targetX = target === this.scrollBar[0][0], targetY = target === this.scrollBar[1][0], 
 			targetCX = target === this.scrollBarContainer[0][0], targetCY = target === this.scrollBarContainer[1][0];
 			
@@ -343,13 +349,14 @@
 			this._getMousePosition.apply( this, arguments );
 			
 			if (delta) {					
-				
+					
 				this.__tmp__._scrollsX = true;
 				this.__tmp__._scrollsY = true;	
 				this.__tmp__._mode = 'wheel';
-				
-				this.initMouseWheel();
-				
+				this.__tmp__._start.x = 0;
+				this.__tmp__._start.y = 0;
+				this._checkDragMXYPos();
+				this.initMouseWheel();				
 			} else {
 				
 				$global.bind(this.events.M_MOVE,$.proxy(this._getMousePosition,this));	
@@ -397,6 +404,7 @@
 			if (!this.__tmp__._scrolls) {
 				 this.__tmp__._scrolls = true;
 			} 
+
 			this.__tmp__.mx = this.mx;
 			this.__tmp__.my = this.my;			
 		},
@@ -411,7 +419,7 @@
 				this.startTimer('scrollStop');			
 			} else {													
 				this.stopScroll();	
-				this.__tmp__._scrolls = false;				
+				this._clearScrollStatus(false);				
 				this.initMouseWheel('rebind');				
 				this.elem.trigger( this.events.S_STOP );	
 				this.__tmp__._mx = null;
@@ -431,9 +439,7 @@
 		dragScrollStart : function ( e ) {
 			this.stopScroll();
 			e.preventDefault();
-			this.__tmp__._scrollsX = true;
-			this.__tmp__._scrollsY = true;				
-			
+			this._clearScrollStatus(true);				
 			this._getMousePosition.apply( this, arguments );				
 			
 			this.__tmp__._start.x = this.mx + this.scrollElem[0].scrollLeft;
@@ -448,17 +454,20 @@
 			this.startTimer('dragScrollMove');
 			this.elem.trigger( this.events.S_START );		
 		},
-		_checkDirection : function () {
-			
+		_checkDragMXYPos : function () {
+			var pos = this._getScrollOffset()
+			this.mx = Math.round( (pos.x) / this.barIndex.X[0]);
+			this.my = Math.round( (pos.y) / this.barIndex.Y[0]);
 		},
 		dragScrollMove : function(){					
-			
+			//this._checkDragMXYPos();
 			this.stop = false;
 			var sl = Math.min(Math.max(this.__tmp__._start.x - this.mx,0),this.scrollElem[0].scrollWidth),			 
 				st = Math.min(Math.max(this.__tmp__._start.y - this.my,0),this.scrollElem[0].scrollHeight),
 				scrolled = this._getScrollOffset();
 			this._getDiff();
-			this.scroll( sl, st );											
+			this.scroll( sl, st );					
+			
 			this.__tmp__.temp_x = scrolled.x;
 			this.__tmp__.temp_y	= scrolled.y;		
 			
@@ -473,21 +482,30 @@
 		},
 		dargScrollStop : function () {
 			var hasScrolled = this._hasScrolledSince(),pos;
-			
+			console.log('scrollsout');
 			if ( hasScrolled.verify ) {
 				pos = this._getDragScrollPosition();
-				this.scroll( pos[0], pos[1] );	
-				
+				this.scroll( pos[0], pos[1] );					
 				this.startTimer('dargScrollStop');			
 				this.__tmp__._temp_x = hasScrolled.scrollLeft;
 				this.__tmp__._temp_y = hasScrolled.scrollTop;				
 			} else {
+				
 				this.stopScroll();
 				this.scrollElem.unbind( this.events.SCROLL ) ;
+				this._clearScrollStatus(false);
 				this.elem.trigger( this.events.S_STOP );
 			}								
 		},
-		
+		_clearScrollStatus : function () {
+			var args = arguments, l = args.length,
+			a = args[0],b = args[1],c = args[2];
+			if (l === 1 ) {b = a;c = a;}
+			if (l === 2 ) {c = b;}			
+			this.__tmp__._scrolls = a;
+			this.__tmp__._scrollsX = b;
+			this.__tmp__._scrollsY = c;							
+		},
 		hideBars : function(){	
 			if (this.__tmp__._scrolls) {
 				return this;
@@ -500,8 +518,10 @@
 		showBars : function(){
 			
 			this.scrollBarContainer.each(function(){
-				this.css({opacity:0,display:'block'});
-				this.stop().delay(100).fadeTo(250,1);
+				if ( parseInt(this.css('opacity')) < 1 ) {
+					this.css({opacity:0,display:'block'});
+					this.stop().delay(100).fadeTo(250,1);
+				}
 			});
 			return this;
 		},
@@ -517,9 +537,13 @@
 		},		
 
 		teardown : function (e) {
+			var i = 2;
 			this.elem.removeClass('scrolls');
 			this._unbind();
 			this.elem.unbind('destroyed');
+			while (i--) {
+				this.scrollBarContainer[i].empty().remove();
+			}
 			$.removeData( this.name );
 		}
 	});
