@@ -26,6 +26,7 @@
  *		- removed some options: onScrollInit, workOnChildElement, onScrollDirChange
  *		- fixed some problemes
  *		- changed some internal functions
+ *		- general refactoring issues
  * -------------------------------------------------------------------------------------------- 
  * - 0.2.b1pre:
  * --------------------------------------------------------------------------------------------
@@ -365,9 +366,7 @@
 			this.startTimer('scrollBPos');					
 			this.elem.trigger( this.events.S_START );		
 		},
-		_getSCBPos : function () {
-			
-		},
+
 		scrollBPos : function () {	
 			var t,l,pos;
 			
