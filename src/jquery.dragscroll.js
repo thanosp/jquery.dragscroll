@@ -118,9 +118,7 @@
 				that.scrollBarContainer[i]
 					.addClass(that.name + '-scrollbar-container ' + o + ah)
 					.append(that.scrollBar[i].addClass(that.name + '-scrollbar ' + o) );
-				if (that.options.scrollBars) {						
-					that.scrollBarContainer[i].appendTo(that.elem);	
-				}			
+					that._addBars(i);
 			});
 
 			this.elem.css('overflow','visible');
@@ -140,6 +138,11 @@
 		reInit : function () {
 			return this._buildIndex();
 		},
+		_addBars : function (i) {
+			if (this.options.scrollBars) {						
+					this.scrollBarContainer[i].appendTo(this.elem);	
+			}				
+		},
 		_buildIndex : function () {
 			this.barIndex = {
 				X : scrollbarDimension(this.scrollElem, this.scrollElem, 'Width'),
@@ -153,6 +156,8 @@
 				x : this.options.scrollBars ? this.scrollBarContainer[0].innerWidth() : this.scrollElem.innerWidth(),
 				y : this.options.scrollBars ? this.scrollBarContainer[1].innerHeight() : this.scrollElem.innerHeight()
 			}
+			this.barIndex.X[0] === 1 ? this.scrollBarContainer[0].detach() : this._addBars(0);
+			this.barIndex.Y[0] === 1 ? this.scrollBarContainer[1].detach() : this._addBars(1);
 			
 		},
 		_bind : function(){
