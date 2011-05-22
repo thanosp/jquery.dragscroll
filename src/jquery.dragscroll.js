@@ -21,6 +21,10 @@
  *
  * changelog:
  * --------------------------------------------------------------------------------------------
+ * - 0.2.b3pre:
+ * --------------------------------------------------------------------------------------------
+ *		- fixed MSIE 6+ issues
+ * --------------------------------------------------------------------------------------------
  * - 0.2.b2pre:
  * --------------------------------------------------------------------------------------------
  *		- removed some options: onScrollInit, workOnChildElement, onScrollDirChange
@@ -59,16 +63,18 @@
  * - pageup pagedown key support
  * known issues:
  * --------------------------------------------------------------------------------------------
- * - 
+ * - MSIE 8 doesn't fade out scrollbar handles
  * --------------------------------------------------------------------------------------------
  * @author Thomas Appel 
- * @version 0.2.b1pre
+ * @version 0.2.b3pre
  */
 
 (function($, global){
 	var doc = global.document,
 		//body = $(doc.body),
-		$global = $(global);
+		$global = $(global),
+		
+		sc_listener = $.browser.msie && $.browser.version < 9 ? $('html') : $global;
 		
 	function scrollbarDimension(c,b, method) {
 		var a = c[0]['scroll'+method] / b['outer'+method]();
@@ -162,7 +168,7 @@
 		},
 		_bind : function(){
 			var that = this;
-			$global.bind(this.events.RESIZE, $.proxy(this._buildIndex, this));
+			sc_listener.bind(this.events.RESIZE, $.proxy(this._buildIndex, this));
 			this.elem.bind('destroyed',$.proxy(this.teardown,this));
 			this.elem.bind(this.name + 'ready', $.proxy(this.onInitReady,this));
 			//this.scrollBarContainer.bind(this.events.M_DOWN,$.proxy(this.scrollStart,this));			
@@ -194,7 +200,7 @@
 				.unbind( this.events.S_STOP )						
 				.unbind( this.events.S_START );							
 			this.scrollElem.unbind( this.events.M_DOWN );					
-			$global.unbind(this.events.M_MOVE).unbind(this.events.M_UP).unbind(this.events.RESIZE);	
+			sc_listener.unbind(this.events.M_MOVE).unbind(this.events.M_UP).unbind(this.events.RESIZE);	
 		},
 		onInitReady : function () {
 			
@@ -233,8 +239,7 @@
 			return {x : this.scrollElem[0].scrollLeft, y : this.scrollElem[0].scrollTop};
 		},
 		_getMousePosition : function( e, delta, deltaX, deltaY ) {
-			//console.log(e.originalEvent.wheelDeltaX, e.originalEvent.wheelDeltaY)
-			//console.log(deltaX, deltaY)
+
 			e.preventDefault();
 
 			if (!delta) {
@@ -304,7 +309,7 @@
 			
 			this.__tmp__._x += ( tempX - this.__tmp__._x ) / this.options.smoothness ;
 			this.__tmp__._y += ( tempY - this.__tmp__._y ) / this.options.smoothness ;
-			//console.log(posT)
+
 			return [ this.__tmp__._x, this.__tmp__._y];
 		},
 		_getDiff : function() {
@@ -359,8 +364,8 @@
 				this.initMouseWheel();				
 			} else {
 				
-				$global.bind(this.events.M_MOVE,$.proxy(this._getMousePosition,this));	
-				$global.bind(this.events.M_UP,$.proxy(this.scrollStop,this));				
+				sc_listener.bind(this.events.M_MOVE,$.proxy(this._getMousePosition,this));	
+				sc_listener.bind(this.events.M_UP,$.proxy(this.scrollStop,this));				
 				
 				this.__tmp__._start.x = targetX ? 
 					this.mx - this.scrollBar[0].offset().left + this.scrollBarContainer[0].offset().left : 
@@ -412,8 +417,8 @@
 		scrollStop : function( e ) {			
 			var hasScrolled = this._hasScrolledSince();
 			
-			$global.unbind( this.events.M_MOVE );				
-			$global.unbind( this.events.M_UP );	
+			sc_listener.unbind( this.events.M_MOVE );				
+			sc_listener.unbind( this.events.M_UP );	
 
 			if ( hasScrolled.verify ) {	
 				this.startTimer('scrollStop');			
@@ -447,8 +452,8 @@
 			
 			// start to record the mouse distance
 						
-			$global.bind( this.events.M_MOVE, $.proxy( this._getMousePosition, this ) );				
-			$global.bind( this.events.M_UP, $.proxy( this._initDragScrollStop,this ) );	
+			sc_listener.bind( this.events.M_MOVE, $.proxy( this._getMousePosition, this ) );				
+			sc_listener.bind( this.events.M_UP, $.proxy( this._initDragScrollStop,this ) );	
 			
 			this.scrollElem.bind( this.events.SCROLL, $.proxy( this.setScrollbar,this ) );		
 			this.startTimer('dragScrollMove');
@@ -474,15 +479,15 @@
 			this.startTimer('dragScrollMove');			
 		},
 		_initDragScrollStop : function (){
-			$global.unbind( this.events.M_MOVE );	
-			$global.unbind( this.events.M_UP );						
+			sc_listener.unbind( this.events.M_MOVE );	
+			sc_listener.unbind( this.events.M_UP );						
 			this.elem.removeClass('scrolls');
 			this.stopScroll();
 			this.dargScrollStop();
 		},
 		dargScrollStop : function () {
 			var hasScrolled = this._hasScrolledSince(),pos;
-			console.log('scrollsout');
+
 			if ( hasScrolled.verify ) {
 				pos = this._getDragScrollPosition();
 				this.scroll( pos[0], pos[1] );					
