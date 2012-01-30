@@ -2,7 +2,7 @@
 <html>
 	<head>
 		<meta charset="utf-8" />
-		<title>Drag Scroll - default setup</title>
+		<title>Drag Scroll - no scrollbars</title>
 		<style>
 			body {
 				height:100%;
@@ -123,8 +123,9 @@ ENDE</h1>
 			cons.html('<p style="color:blue;">ready</p>');
 			$('#container').dragscroll(
 			{
-				scrollClassName: 'example-1',
-				scrollBars: true,
+				scrollClassName: 'example-2',
+				autoFadeBars: true,
+				scrollBars: false,
 				smoothness: 15,
 				mouseWheelVelocity: 2,
 				onScrollStart: function () {
