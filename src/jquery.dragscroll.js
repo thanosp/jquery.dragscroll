@@ -512,16 +512,16 @@
 			sc_listener.unbind(this.events.M_UP);
 			this.elem.removeClass('scrolls');
 			this.stopScroll();
-			this.dargScrollStop();
+			this.dragScrollStop();
 		},
-		dargScrollStop: function () {
+		dragScrollStop: function () {
 			var hasScrolled = this._hasScrolledSince(),
 			pos;
 
 			if (hasScrolled.verify) {
 				pos = this._getDragScrollPosition();
 				this.scroll(pos[0], pos[1]);
-				this.startTimer('dargScrollStop');
+				this.startTimer('dragScrollStop');
 				this.__tmp__._temp_x = hasScrolled.scrollLeft;
 				this.__tmp__._temp_y = hasScrolled.scrollTop;
 			} else {
