@@ -197,7 +197,11 @@
 			this.elem.bind(this.name + 'ready', $.proxy(this.onInitReady, this));
 			//this.scrollBarContainer.bind(this.events.M_DOWN,$.proxy(this.scrollStart,this));
 			this.elem.delegate('.' + this.name + '-scrollbar-container', this.events.M_DOWN, $.proxy(this.scrollStart, this));
-			this.elem.bind(this.events.M_WHEEL, $.proxy(this.scrollStart, this));
+			
+			// bind the mouseWheel unless requested otherwise
+			if (false === this.options.ignoreMouseWheel) {
+                this.elem.bind(this.events.M_WHEEL, $.proxy(this.scrollStart, this));
+            }
 
 			this.scrollElem.bind(this.events.M_DOWN, $.proxy(this.dragScrollStart, this));
 
@@ -599,7 +603,8 @@
 			mouseWheelVelocity: 2,
 			autoFadeBars: true,
 			onScrollStart: function () {},
-			onScrollEnd: function () {}
+			onScrollEnd: function () {},
+			ignoreMouseWheel: false
 		},
 		o = $.extend({},
 		defaults, options),
