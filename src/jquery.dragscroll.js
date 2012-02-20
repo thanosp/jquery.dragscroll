@@ -231,6 +231,9 @@
 			}
 		},
 		initMouseWheel: function (mode) {
+		    if (true === this.options.ignoreMouseWheel) {
+		        return false;
+		    }
 			if (mode === 'rebind') {
 				this.elem.unbind(this.events.M_WHEEL).bind(this.events.M_WHEEL, $.proxy(this.scrollStart, this));
 			} else {
